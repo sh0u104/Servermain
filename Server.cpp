@@ -280,12 +280,11 @@ void Server::Recieve(Client* client)
 						}
 					}
 				}
-				
+				std::cout<<"ID " << logout.id << " 退出" << std::endl;
 				EraseClient(client);
 				Loop = false;
 				if (clients.size() <= 0)
 				{
-					//loop = false;
 					std::cout << "サーバー閉じるなら" << "入力して　 exit" << std::endl;
 				}
 			}

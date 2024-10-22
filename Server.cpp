@@ -208,9 +208,9 @@ void Server::Recieve(Client* client)
 				short type = 0;
 				memcpy_s(&type, sizeof(type), buffer, sizeof(short));
 				//std::cout << "recv cmd " << type << std::endl;
-				switch (static_cast<NetworkTag>(type))
+				switch (static_cast<TcpTag>(type))
 				{
-				case NetworkTag::Logout:
+				case TcpTag::Logout:
 				{
 					PlayerLogout logout;
 					memcpy_s(&logout, sizeof(logout), buffer, sizeof(PlayerLogout));
@@ -256,7 +256,7 @@ void Server::Recieve(Client* client)
 					}
 				}
 				break;
-				case NetworkTag::TeamCreate:
+				case TcpTag::TeamCreate:
 				{
 					TeamCreate teamcreate;
 					//チームを作成できたか
@@ -293,7 +293,7 @@ void Server::Recieve(Client* client)
 					}
 				}
 				break;
-				case NetworkTag::Teamjoin:
+				case TcpTag::Teamjoin:
 				{
 					Teamjoin teamjoin;
 					Teamsync teamsync;
@@ -330,7 +330,7 @@ void Server::Recieve(Client* client)
 									std::cout << client->player->id << "がチームID : " << teamjoin.number << " に加入" << std::endl;
 
 									//チームに入ろうとした人は誰がチームにいるかわからんから
-									teamsync.cmd = NetworkTag::Teamsync;
+									teamsync.cmd = TcpTag::Teamsync;
 									teamsync.id[j] = teamjoin.id;
 									//ここでsendする
 									memcpy_s(&syncbuffer, sizeof(syncbuffer), &teamsync, sizeof(Teamsync));
@@ -355,7 +355,7 @@ void Server::Recieve(Client* client)
 					}
 				}
 				break;
-				case NetworkTag::Teamleave:
+				case TcpTag::Teamleave:
 				{
 					TeamLeave teamLeave;
 					memcpy_s(&teamLeave, sizeof(teamLeave), buffer, sizeof(TeamLeave));
@@ -390,7 +390,7 @@ void Server::Recieve(Client* client)
 					}
 				}
 				break;
-				case NetworkTag::StartCheck:
+				case TcpTag::StartCheck:
 				{
 					StartCheck startcheck;
 					memcpy_s(&startcheck, sizeof(startcheck), buffer, sizeof(StartCheck));
@@ -422,7 +422,7 @@ void Server::Recieve(Client* client)
 
 				}
 				break;
-				case NetworkTag::Gamestart:
+				case TcpTag::Gamestart:
 				{
 					GameStart gamestart;
 					int sendcount = 0;
@@ -450,7 +450,7 @@ void Server::Recieve(Client* client)
 					}
 				}
 				break;
-				case NetworkTag::GameEnd:
+				case TcpTag::GameEnd:
 				{
 					GameEnd gameend;
 					memcpy_s(&gameend, sizeof(GameEnd), buffer, sizeof(GameEnd));
@@ -466,7 +466,7 @@ void Server::Recieve(Client* client)
 					}
 				}
 				break;
-				case NetworkTag::GeustLogin:
+				case TcpTag::GeustLogin:
 				{
 					++this->id;
 					client->player->id = this->id;
@@ -543,28 +543,7 @@ void Server::Recieve(Client* client)
 				//	std::cout << signUp.name << "はオンライン中" << std::endl;
 				//}
 				//break;
-				case NetworkTag::Message:
-				{
-					Message massage;
-					std::cout << "Message " << std::endl;
-					memcpy(&massage, buffer, sizeof(Message));
-					std::cout << massage.text << std::endl;
-
-					for (int i = 0; i < TeamMax - 1; ++i)
-					{
-						if (client->player->teamnumber != team[i].TeamNumber)continue;
-						for (int j = 0; j < 3; ++j)
-						{
-							if (team[i].sock[j] <= 0)continue;
-
-							//std::cout << "送信元id " << client->player->id << std::endl;
-							//std::cout << "送信先id " << Client->player->id << std::endl;
-							int s = send(team[i].sock[j], buffer, sizeof(buffer), 0);
-						}
-					}
-				}
-				break;
-				case NetworkTag::Move:
+				case TcpTag::Move:
 				{
 					PlayerInput input;
 					memcpy_s(&input, sizeof(input), buffer, sizeof(PlayerInput));
@@ -589,27 +568,41 @@ void Server::Recieve(Client* client)
 					}
 				}
 				break;
-				case NetworkTag::Attack:
-				{
-					PlayerInput input;
-					memcpy_s(&input, sizeof(input), buffer, sizeof(PlayerInput));
-					client->player->velocity = input.velocity;
-
-
-					for (Client* Client : clients)
-					{
-						std::cout << "送信元id " << client->player->id << std::endl;
-						std::cout << "送信先id " << Client->player->id << std::endl;
-						int s = send(Client->sock, buffer, sizeof(buffer), 0);
-						//client->player->position = input.position;
-						std::cout << "send cmd " << type << std::endl;
-						std::cout << "" << std::endl;
-
-					}
-				}
-				break;
-				
-			
+				//case TcpTag::Message:
+				//{
+				//	Message massage;
+				//	std::cout << "Message " << std::endl;
+				//	memcpy(&massage, buffer, sizeof(Message));
+				//	std::cout << massage.text << std::endl;
+				//	for (int i = 0; i < TeamMax - 1; ++i)
+				//	{
+				//		if (client->player->teamnumber != team[i].TeamNumber)continue;
+				//		for (int j = 0; j < 3; ++j)
+				//		{
+				//			if (team[i].sock[j] <= 0)continue;
+				//			//std::cout << "送信元id " << client->player->id << std::endl;
+				//			//std::cout << "送信先id " << Client->player->id << std::endl;
+				//			int s = send(team[i].sock[j], buffer, sizeof(buffer), 0);
+				//		}
+				//	}
+				//}
+				//break;
+				//case TcpTag::Attack:
+				//{
+				//	PlayerInput input;
+				//	memcpy_s(&input, sizeof(input), buffer, sizeof(PlayerInput));
+				//	client->player->velocity = input.velocity;
+				//	for (Client* Client : clients)
+				//	{
+				//		std::cout << "送信元id " << client->player->id << std::endl;
+				//		std::cout << "送信先id " << Client->player->id << std::endl;
+				//		int s = send(Client->sock, buffer, sizeof(buffer), 0);
+				//		//client->player->position = input.position;
+				//		std::cout << "send cmd " << type << std::endl;
+				//		std::cout << "" << std::endl;
+				//	}
+				//}
+				//break;
 				}
 			}
 
@@ -628,9 +621,9 @@ void Server::Recieve(Client* client)
 void Server::Login(SOCKET clientsock, short ID)
 {
 	PlayerLogin login;
-	login.cmd = NetworkTag::Login;
+	login.cmd = TcpTag::Login;
 	login.id = ID;
-
+	
 	char bufferlogin[sizeof(PlayerLogin)];
 	memcpy_s(bufferlogin, sizeof(bufferlogin), &login, sizeof(PlayerLogin));
 	send(clientsock, bufferlogin, sizeof(PlayerLogin), 0);

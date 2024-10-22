@@ -12,6 +12,8 @@ class Server
 {
 public:
 
+	void UDPExecute();
+
 	// クライアント情報
 	struct Client {
 		struct sockaddr_in addr {};
@@ -19,6 +21,7 @@ public:
 		Player* player = nullptr;
 		bool Geustflag = false;
 	};
+
 	enum class NetworkTag : unsigned short
 	{
 		Message,		// チャットメッセージ
@@ -27,6 +30,7 @@ public:
 		Sync,			// 同期
 		TeamCreate,     //チーム作成
 		Teamjoin,       //チーム加入
+		Teamleave,      //チームを抜ける
 		Teamsync,       // チームにIDを送信
 		StartCheck,     //スタート準備ができてるか
 		Gamestart,       //ゲームを始めでいいか
@@ -36,10 +40,6 @@ public:
 		GeustLogin,		// サーバーにログイン
 		Login,          //受信用
 		Logout,			// サーバーからログアウト
-		IdSearch,       //ID検索
-		FriendRequest,  //フレンド申請
-		FriendApproval, //フレンド承認
-		SeeFriend,      //自分のフレンドを見る
 	};
 
 	struct Team
@@ -155,6 +155,13 @@ public:
 		int number;
 	};
 
+	struct TeamLeave
+	{
+		NetworkTag cmd;
+		short id;
+		bool isLeader;
+	};
+
 	struct Teamsync
 	{
 		NetworkTag cmd;
@@ -226,6 +233,9 @@ private:
 	std::vector<std::thread*> recvThreads;
 	bool loop = true;
 
-	int teamnumbergrant = 0;
+	int teamnumbergrant = 1000;
 	
+
+	struct sockaddr_in uAddr;
+	SOCKET uSock = INVALID_SOCKET;
 };

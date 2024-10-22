@@ -4,19 +4,28 @@
 class Player
 {
 public:
+
 	enum class State
 	{
 		Idle,
 		Move,
-		Jump,
 		Land,
+		Jump,
 		JumpFlip,
-		Attack,
-		Damage,
-		Death,
-		Revive,
-		None,
 	};
+	//enum class State
+	//{
+	//	Idle,
+	//	Move,
+	//	Jump,
+	//	Land,
+	//	JumpFlip,
+	//	Attack,
+	//	Damage,
+	//	Death,
+	//	Revive,
+	//	None,
+	//};
 
 	short id = 0;
 	DirectX::XMFLOAT3 position{ 0,0,0 };

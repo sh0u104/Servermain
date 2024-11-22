@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 #include "Player.h"
-
+#include "Enemy.h"
 class Server
 {
 public:
@@ -17,9 +17,12 @@ public:
 	// クライアント情報
 	struct Client {
 		struct sockaddr_in addr {};
+		struct sockaddr_in uAddr {};
 		SOCKET sock = INVALID_SOCKET;
 		Player* player = nullptr;
 		bool Geustflag = false;
+		bool isRecvUdpAddr = false;
+		bool isTeam = false;
 	};
 	enum class TcpTag : unsigned short
 	{
@@ -37,13 +40,16 @@ public:
 		Move,
 		Sync,			// 同期
 		Login,
+		UdpAddr,          //サーバーでUDPのアドレス保存用
+		EnemyDamage,    //敵がダメージを受けたら
 	};
 	enum class UdpTag : unsigned short
 	{
 		Message,		// チャットメッセージ
-		//Move,			// 移動
+		Move,			// 移動
+		EnemyMove,       //敵の移動
 		Attack,			// 攻撃
-
+		UdpAddr,          //サーバーでUDPのアドレス保存用
 	};
 
 
@@ -53,18 +59,20 @@ public:
 		SOCKET sock[4] = {};
 		int ID[4] = {};
 		bool check[4] = {};
+		struct sockaddr_in uAddr[4] = {};
 		int logincount = 0;
+		bool isJoin = false;
 	};
 
 	struct SenderData
 	{
 		char name[10];
-		short ID;
+		int ID;
 	};
 
 	struct User
 	{
-		short ID;
+		int ID;
 		char name[10];
 	};
 
@@ -72,7 +80,7 @@ public:
 	{
 		char name[10];
 		char pass[10];
-		short ID;
+		int ID;
 		SOCKET sock;
 		bool onlineflag;
 
@@ -80,8 +88,9 @@ public:
 		std::vector<User>friendList;
 
 	};
-	std::vector<SignData>signData;
+	//std::vector<SignData>signData;
 
+#define TeamJoinMax 3
 #define TeamMax 10
 	Team team[TeamMax];
 
@@ -94,8 +103,8 @@ public:
 	};
 	struct PlayerInput
 	{
-		TcpTag cmd;
-		short id;
+		UdpTag cmd;
+		int id;
 		DirectX::XMFLOAT3 velocity;
 		DirectX::XMFLOAT3 position;
 		Player::State state;
@@ -108,7 +117,7 @@ public:
 	struct PlayerLogin
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 	};
 
 	struct GeustLogin
@@ -135,12 +144,12 @@ public:
 	struct PlayerLogout
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 	};
 	struct PlayerSync
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 		DirectX::XMFLOAT3 position;
 		DirectX::XMFLOAT3 velocity;
 		DirectX::XMFLOAT3 angle;
@@ -149,7 +158,7 @@ public:
 	struct TeamCreate
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 		int number;
 		bool Permission;
 	};
@@ -157,27 +166,27 @@ public:
 	struct Teamjoin
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 		int number;
 	};
 
 	struct TeamLeave
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 		bool isLeader;
 	};
 
 	struct Teamsync
 	{
 		TcpTag cmd;
-		short id[4] = {};
+		int id[4] = {};
 	};
 
 	struct StartCheck
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 		short teamnunber;
 		bool check;
 	};
@@ -185,13 +194,18 @@ public:
 	struct GameStart
 	{
 		TcpTag cmd;
-		short id;
+		int id;
 		short teamnunber;
 	};
 	struct GameEnd
 	{
 		TcpTag cmd;
 		short teamnunber;
+	};
+
+	struct SendUdpAddr
+	{
+		TcpTag cmd;
 	};
 
 	/*struct IdSearch
@@ -232,6 +246,9 @@ public:
 	void EraseClient(Client* client);
 
 	void Login(SOCKET clientsock, short ID);
+
+	// 登録済のクライアントか判断を行う
+	bool HasSameData(const std::vector<Client*>& vec, const sockaddr_in& target);
 private:
 	int id = 0;
 	SOCKET sock = INVALID_SOCKET;

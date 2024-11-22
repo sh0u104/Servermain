@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 #include <DirectXMath.h>
 class Player
 {
@@ -27,12 +26,15 @@ public:
 	//	None,
 	//};
 
-	short id = 0;
+	int id = -1;
 	DirectX::XMFLOAT3 position{ 0,0,0 };
 	DirectX::XMFLOAT3 angle{ 0,0,0 };
 	DirectX::XMFLOAT3 velocity{ 0,0,0 };
 	State state = State::Idle;
+
+	//4Œ…
 	int teamnumber = 0;
-	int teamID = 0;
+	//1Œ…
+	int teamGrantID = 0;
 };
 

@@ -22,7 +22,6 @@ public:
 		Player* player = nullptr;
 		bool Geustflag = false;
 		bool isRecvUdpAddr = false;
-		bool isTeam = false;
 	};
 	enum class TcpTag : unsigned short
 	{
@@ -174,7 +173,7 @@ public:
 	{
 		TcpTag cmd;
 		int id;
-		bool isLeader;
+		bool isHost;
 	};
 
 	struct Teamsync

@@ -22,6 +22,7 @@ public:
 		Player* player = nullptr;
 		bool Geustflag = false;
 		bool isRecvUdpAddr = false;
+		bool startCheck = false;
 	};
 	enum class TcpTag : unsigned short
 	{
@@ -54,12 +55,10 @@ public:
 
 	struct Team
 	{
+
+		std::vector<Client*> clients;
+		
 		int TeamNumber = 0;
-		SOCKET sock[4] = {};
-		int ID[4] = {};
-		bool check[4] = {};
-		struct sockaddr_in uAddr[4] = {};
-		int logincount = 0;
 		bool isJoin = false;
 	};
 

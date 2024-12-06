@@ -171,50 +171,57 @@ void Server::Recieve(Client* client)
 			int addrSize = sizeof(sockaddr);
 			sockaddr_in temp;
 			int size = recvfrom(uSock, Buffer, sizeof(Buffer), 0, reinterpret_cast<sockaddr*>(&temp), &addrSize);
-
+			
 			if (size > 0)
 			{
 				short type = 0;
 				memcpy_s(&type, sizeof(type), Buffer, sizeof(short));
-			    //一度目かどうか
+			    //clientsに登録されてるかどうか
 				if (HasSameData(clients, temp))
 				{
+					int teamGrantID = client->player->teamGrantID;
 					switch (static_cast<UdpTag>(type))
 					{
 					case UdpTag::Move:
 					{
-						int teamGrantID = client->player->teamGrantID;
-						//チームの皆に
-						for (int i = 0; i < team[teamGrantID].clients.size(); ++i)
+						//チームからかどうか
+						if (HasSameData(team[teamGrantID].clients, temp))
 						{
 							//自分なら飛ばす
-							if (team[teamGrantID].clients.at(i)->player->id == client->player->id)
-						    continue;
-							//if(i==2)
-							//std::cout << client->player->id <<">>"<< team[client->player->teamGrantID].ID[i]<< std::endl;
-							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&team[teamGrantID].clients.at(i)->uAddr), addrSize);
-		
+							if (temp.sin_port == client->uAddr.sin_port)
+								continue;
+							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+							//チームの皆に
+							//for (int i = 0; i < team[teamGrantID].clients.size(); ++i)
+							//{
+								
+								//if (team[teamGrantID].clients.at(i)->player->id == client->player->id)
+								//break;
+								//size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&team[teamGrantID].clients.at(i)->uAddr), addrSize);
+								//size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+
+							//}
 						}
 
 					}
 					break;
-					
+					//ホストのエネミー情報をチームメンバーに送る用
 					case UdpTag::EnemyMove:
 					{
-						int teamGrantID = client->player->teamGrantID;
 						//チームの皆に
 						for (int i = 0; i < team[teamGrantID].clients.size(); ++i)
 						{
 							//自分なら飛ばす
-							if (team[teamGrantID].clients.at(i)->player->id == client->player->id)
+							if (team[teamGrantID].clients.at(i)->uAddr.sin_port == client->uAddr.sin_port)
 							continue;
-
 							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&team[teamGrantID].clients.at(i)->uAddr), addrSize);
 						}
 					}
 					break;
 					}
+
 				}
+				//clientsに登録されてなかったら
 				else
 				{
 					switch (static_cast<UdpTag>(type))
@@ -586,7 +593,7 @@ void Server::Recieve(Client* client)
 							}
 						}
 
-						//準備OKとログイン数の数が合えば全員に送信
+						//全員の準備ができていたら
 						if (isStartCheck)
 						{
 							for (int i = 0; i<team[teamGrantID].clients.size(); ++i)
@@ -595,7 +602,8 @@ void Server::Recieve(Client* client)
 								std::cout << "ゲームスタート送信 "<< team[teamGrantID].clients.at(i)->player->id<< std::endl;
 								std::cout<<"ID : " << team[teamGrantID].clients.at(i)->player->id << "uaddr "<< team[teamGrantID].clients.at(i)->uAddr.sin_addr.S_un.S_addr <<
 								"uport"<< team[teamGrantID].clients.at(i)->uAddr.sin_port << std::endl;
-								
+
+								std::cout <<"teamGrantID : " << team[teamGrantID].clients.at(i)->player->teamGrantID << std::endl;
 							}
 						}
 
@@ -700,3 +708,4 @@ bool Server::HasSameData(const std::vector<Client*>& vec, const sockaddr_in& tar
 	}
 	return false;
 }
+

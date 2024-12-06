@@ -247,6 +247,7 @@ public:
 
 	// 登録済のクライアントか判断を行う
 	bool HasSameData(const std::vector<Client*>& vec, const sockaddr_in& target);
+	
 private:
 	int id = 0;
 	SOCKET sock = INVALID_SOCKET;

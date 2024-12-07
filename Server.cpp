@@ -20,25 +20,25 @@ void Server::Exit()
 	}
 }
 // クライアント削除関数
-void Server::EraseClient(Client* client)
-{
-	int i = 0;
-	for (i = 0; i < clients.size(); ++i)
-	{
-		if (clients.at(i)->sock == client->sock)
-		{
-			int r = closesocket(client->sock);
-			if (r != 0)
-			{
-				std::cout << "Close Socket Failed." << std::endl;
-			}
-			client->sock = INVALID_SOCKET;
-			delete client->player;
-			break;
-		}
-	}
-	clients.erase(clients.begin() + i);
-}
+//void Server::EraseClient(Client* client)
+//{
+//	int i = 0;
+//	for (i = 0; i < clients.size(); ++i)
+//	{
+//		if (clients.at(i)->sock == client->sock)
+//		{
+//			int r = closesocket(client->sock);
+//			if (r != 0)
+//			{
+//				std::cout << "Close Socket Failed." << std::endl;
+//			}
+//			client->sock = INVALID_SOCKET;
+//			delete client->player;
+//			break;
+//		}
+//	}
+//	clients.erase(clients.begin() + i);
+//}
 
 
 void Server::UDPExecute()
@@ -120,30 +120,38 @@ void Server::Execute()
 	int size = sizeof(struct sockaddr_in);
 	do {
 
-		Client* newClient = new Client();
+		std::shared_ptr<Client> newClient = std::make_shared<Client>();
+		//Client* newClient = new Client();
 		// 接続要求を処理する
 		newClient->sock = accept(sock, (struct sockaddr*)&newClient->addr, &size);
 		if (newClient->sock != INVALID_SOCKET)
 		{
 			//接続後処理
-			newClient->player = new Player();
+			newClient->player = std::make_shared<Player>();
 			newClient->player->id = 0;
 			newClient->player->position = DirectX::XMFLOAT3(0, 0, 0);
 			newClient->player->angle = DirectX::XMFLOAT3(0, 0, 0);
 
 			clients.emplace_back(newClient);
 
-			std::thread* recvThread = new std::thread(&Server::Recieve, this, newClient);
-			recvThreads.push_back(recvThread);
+			//std::thread* recvThread = new std::thread(&Server::Recieve, this, newClient);
+			//recvThreads.push_back(recvThread);
+			recvThreads.push_back(std::make_shared<std::thread>(&Server::Recieve, this, newClient));
 
 		}
 	} while (loop);
 
 
 	th.join();
-	for (std::thread* thread : recvThreads)
-	{
-		thread->join();
+	//for (std::thread* thread : recvThreads)
+	//{
+	//	thread->join();
+	//}
+	 // スレッドの終了を待機してから解放
+	for (auto& thread : recvThreads) {
+		if (thread->joinable()) {
+			thread->join();
+		}
 	}
 
 	// クライアントのソケット削除
@@ -161,7 +169,7 @@ void Server::Execute()
 }
 
 // 受信関数
-void Server::Recieve(Client* client)
+void Server::Recieve(std::shared_ptr<Client> client)
 {
 	bool Loop = true;
 	do {
@@ -172,6 +180,34 @@ void Server::Recieve(Client* client)
 			sockaddr_in temp;
 			int size = recvfrom(uSock, Buffer, sizeof(Buffer), 0, reinterpret_cast<sockaddr*>(&temp), &addrSize);
 			
+
+			//if (size == -1)
+			//{
+			//	memset(Buffer, 0, sizeof(Buffer));
+			//	int error = WSAGetLastError();
+			//	if (error == WSAEWOULDBLOCK) {
+			//		// データがまだ来ていない場合、処理をスキップして次のループへ
+			//		//if (client->uAddr.sin_port == temp.sin_port)
+			//		//continue;
+			//	}
+			//	else {
+			//		// 他のエラーの場合、ループを終了
+			//		std::cout << client->player->id << " recvfrom error" << error << std::endl;
+			//		if (client->uAddr.sin_port == temp.sin_port)
+			//		{
+			//			Loop = false;
+			//			break;
+			//		}
+			//	}
+			//}
+		    if (size == 0)
+			{
+				// クライアントが接続を閉じた場合の処理
+				std::cout << "接続を閉じた" << std::endl;
+				break;
+			}
+			
+
 			if (size > 0)
 			{
 				short type = 0;
@@ -180,46 +216,34 @@ void Server::Recieve(Client* client)
 				if (HasSameData(clients, temp))
 				{
 					int teamGrantID = client->player->teamGrantID;
-					switch (static_cast<UdpTag>(type))
+					//チームのclientsかどうか
+					//if (HasSameData(team[teamGrantID].clients, temp))
+					if(client->team->clients.size()>0)
+					if (HasSameData(client->team->clients, temp))
 					{
-					case UdpTag::Move:
-					{
-						//チームからかどうか
-						if (HasSameData(team[teamGrantID].clients, temp))
+						switch (static_cast<UdpTag>(type))
+						{
+						case UdpTag::Move:
 						{
 							//自分なら飛ばす
 							if (temp.sin_port == client->uAddr.sin_port)
-								continue;
+								break;
 							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
-							//チームの皆に
-							//for (int i = 0; i < team[teamGrantID].clients.size(); ++i)
-							//{
-								
-								//if (team[teamGrantID].clients.at(i)->player->id == client->player->id)
-								//break;
-								//size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&team[teamGrantID].clients.at(i)->uAddr), addrSize);
-								//size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
-
-							//}
+							
 						}
-
-					}
-					break;
-					//ホストのエネミー情報をチームメンバーに送る用
-					case UdpTag::EnemyMove:
-					{
-						//チームの皆に
-						for (int i = 0; i < team[teamGrantID].clients.size(); ++i)
+						break;
+						//ホストのエネミー情報をチームメンバーに送る用
+						case UdpTag::EnemyMove:
 						{
 							//自分なら飛ばす
-							if (team[teamGrantID].clients.at(i)->uAddr.sin_port == client->uAddr.sin_port)
-							continue;
-							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&team[teamGrantID].clients.at(i)->uAddr), addrSize);
+							if (temp.sin_port == client->uAddr.sin_port)
+								break;
+							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+							
+						}
+						break;
 						}
 					}
-					break;
-					}
-
 				}
 				//clientsに登録されてなかったら
 				else
@@ -256,9 +280,22 @@ void Server::Recieve(Client* client)
 		{
 			char buffer[2048];
 			int r = recv(client->sock, buffer, sizeof(buffer), 0);
+			
+			if (r == -1) {
+				int error = WSAGetLastError();
+				if (error == WSAEWOULDBLOCK) {
+					// データがまだ来ていない場合、処理をスキップして次のループへ
+					
+				}
+				else {
+					// 他のエラーの場合、ループを終了
+					std::cout << client->player->id << " recv error" << error << std::endl;
+					
+				}
+			}
 			if (r == 0)
 			{
-				EraseClient(client);
+				//EraseClient(client);
 				Loop = false;
 				if (clients.size() <= 0)
 				{
@@ -278,7 +315,7 @@ void Server::Recieve(Client* client)
 					memcpy_s(&logout, sizeof(logout), buffer, sizeof(PlayerLogout));
 
 					std::cout << "ID " << logout.id << " 退出" << std::endl;
-					EraseClient(client);
+					//EraseClient(client);
 					Loop = false;
 					if (clients.size() <= 0)
 					{
@@ -289,72 +326,48 @@ void Server::Recieve(Client* client)
 				case TcpTag::TeamCreate:
 				{
 					TeamCreate teamcreate;
-					//チームを作成できたか
-					bool Permission = false;
 					char sendbuffer[2048];
 					memcpy_s(&teamcreate, sizeof(teamcreate), buffer, sizeof(TeamCreate));
 
-					for (int i = 0; i < TeamMax - 1; ++i)
-					{
-						//チームに誰かいたら入れない
-						if (team[i].clients.size() > 0)
-							continue;
-						//チームに空きがあったら
-						Permission = true;
-						++teamnumbergrant;
-						team[i].TeamNumber = teamnumbergrant;
-						team[i].isJoin = true;
-						client->player->teamnumber = teamnumbergrant;
-						client->player->teamGrantID = i;
+					auto team = std::make_shared<Team>();
+					++teamnumbergrant;
+					
+					team->isJoin = true;
+					team->TeamNumber = teamnumbergrant;
+					client->player->teamnumber = teamnumbergrant;
+					team->clients.emplace_back(client);
+					client->team = team.get();
+					teams.emplace_back(team);
 
-						team[i].clients.emplace_back(client);
-
-						std::cout << "ID : " << client->player->id << "がチーム作成 ID : " << team[i].TeamNumber << std::endl;
-					    std::cout << "チーム番号 " << team[i].TeamNumber << " 加入可能" << std::endl;
-					    
-					    teamcreate.number = teamnumbergrant;
-					    teamcreate.Permission = true;
-					    memcpy_s(sendbuffer, sizeof(sendbuffer), &teamcreate, sizeof(TeamCreate));
-					    int s = send(client->sock, sendbuffer, sizeof(TeamCreate), 0);
-						break;
-					}
+					std::cout << "ID : " << client->player->id << "がチーム作成 ID : " << team->TeamNumber << std::endl;
+					std::cout << "チーム番号 " << team->TeamNumber << " 加入可能" << std::endl;
+					teamcreate.number = teamnumbergrant;
+					teamcreate.Permission = true;
+					memcpy_s(sendbuffer, sizeof(sendbuffer), &teamcreate, sizeof(TeamCreate));
+					int s = send(client->sock, sendbuffer, sizeof(TeamCreate), 0);
+					break;
 					//for (int i = 0; i < TeamMax - 1; ++i)
 					//{
-					//	//チーム管理配列に空きがあるか
-					//	if (team[i].TeamNumber == 0)
-					//	{
-					//		Permission = true;
-					//		++teamnumbergrant;
-					//		
-					//		team[i].TeamNumber = teamnumbergrant;
-					//		team[i].isJoin = true;
-					//		//チームのホストに代入
-					//		team[i].sock[0] = client->sock;
-					//		team[i].ID[0] = teamcreate.id;
-					//		team[i].uAddr[0] = client->uAddr;
+					//	//チームに誰かいたら入れない
+					//	if (team[i].clients.size() > 0)
+					//		continue;
+					//	++teamnumbergrant;
+					//	team[i].TeamNumber = teamnumbergrant;
+					//	team[i].isJoin = true;
+					//	client->player->teamnumber = teamnumbergrant;
+					//	client->player->teamGrantID = i;
 					//
-					//		client->player->teamnumber = teamnumbergrant;
-					//		client->player->teamGrantID = i;
-					//	    //チームのログイン数
-					//		++team[i].logincount;
+					//	team[i].clients.emplace_back(client);
 					//
-					//		std::cout << "ID : " << client->player->id << "がチーム作成 ID : " << team[i].TeamNumber << std::endl;
-					//		std::cout << "チーム番号 " << team[i].TeamNumber << " 加入可能" << std::endl;
-					//
-					//		teamcreate.number = teamnumbergrant;
-					//		teamcreate.Permission = true;
-					//		memcpy_s(sendbuffer, sizeof(sendbuffer), &teamcreate, sizeof(TeamCreate));
-					//		int s = send(client->sock, sendbuffer, sizeof(TeamCreate), 0);
-					//
-					//		
-					//		break;
-					//	}
+					//	std::cout << "ID : " << client->player->id << "がチーム作成 ID : " << team[i].TeamNumber << std::endl;
+					//    std::cout << "チーム番号 " << team[i].TeamNumber << " 加入可能" << std::endl;
+					//    
+					//    teamcreate.number = teamnumbergrant;
+					//    teamcreate.Permission = true;
+					//    memcpy_s(sendbuffer, sizeof(sendbuffer), &teamcreate, sizeof(TeamCreate));
+					//    int s = send(client->sock, sendbuffer, sizeof(TeamCreate), 0);
+					//	break;
 					//}
-					//チームを作れなかったら
-					if (!Permission)
-					{
-						int s = send(client->sock, buffer, sizeof(buffer), 0);
-					}
 				}
 				break;
 				case TcpTag::Teamjoin:
@@ -371,99 +384,101 @@ void Server::Recieve(Client* client)
 					//ゲストじゃない時の為に
 					client->player->id = teamjoin.id;
 
-					for (int i = 0; i < TeamMax - 1; ++i)
+					for (int i = 0; i < teams.size(); ++i)
 					{
 						//チーム加入番号と一致しなければ
-						if (team[i].TeamNumber != teamjoin.number)continue;
+						if (teams.at(i)->TeamNumber != teamjoin.number)continue;
 						//チームの全員埋まっていたら
-						if (team[i].clients.size() >= 4)continue;
+						if (teams.at(i)->clients.size() >= 4)continue;
 						//チームに入れるタイミングかどうか？
-						if (team[i].isJoin)
+						if (teams.at(i)->isJoin)
 						{
-							//入れたら
-								join = true;
-								client->player->teamnumber = team[i].TeamNumber;
-								client->player->teamGrantID = i;
-								
-								team[i].clients.emplace_back(client);
-								//入れたら送る
-								int s = send(client->sock, buffer, sizeof(Teamjoin), 0);
-								std::cout << client->player->id << "がチームID : " << teamjoin.number << " に加入" << std::endl;
-					
-								
-								//チームに入ろうとした人は誰がチームにいるかわからんから
-								teamsync.cmd = TcpTag::Teamsync;
+							join = true;
+							client->player->teamnumber = teamjoin.number;
+	
+							teams.at(i)->clients.emplace_back(client);
+							client->team = teams.at(i).get();
+							//入れたら送る
+							int s = send(client->sock, buffer, sizeof(Teamjoin), 0);
+							std::cout << client->player->id << "がチームID : " << teamjoin.number << " に加入" << std::endl;
 
-								for (int j = 0; j < team[i].clients.size(); ++j)
+							//チームに入ろうとした人は誰がチームにいるかわからんから
+							teamsync.cmd = TcpTag::Teamsync;
+							//チームにいる人分
+							for (int j = 0; j < teams.at(i)->clients.size(); ++j)
+							{
+								teamsync.id[j] = teams.at(i)->clients.at(j)->player->id;
+								//本人に以外に送るため
+								if (teamjoin.id != teamsync.id[j])
 								{
-									teamsync.id[j] = team[i].clients.at(j)->player->id;
-									//本人に以外に送るため
-									if (teamjoin.id!= teamsync.id[j])
-									{
-										//チームにいる人に加入者の情報を送る
-										int s = send(team[i].clients.at(j)->sock, buffer, sizeof(buffer), 0);
-										std::cout << "ID " << team[i].clients.at(j)->player->id << " : にID　" << client->player->id << "の加入情報を送信" << std::endl;
-									}
+									//チームにいる人に加入者の情報を送る
+									int s = send(teams.at(i)->clients.at(j)->sock, buffer, sizeof(buffer), 0);
+									std::cout << "ID " << teams.at(i)->clients.at(j)->player->id << " : にID　" << client->player->id << "の加入情報を送信" << std::endl;
 								}
-								//参加者本人にすでにいる人の情報を取得送る
-								memcpy_s(&syncbuffer, sizeof(syncbuffer), &teamsync, sizeof(Teamsync));
-								int se = send(client->sock, syncbuffer, sizeof(Teamsync), 0);
+							}
+							//参加者本人にすでにいる人の情報を取得送る
+							memcpy_s(&syncbuffer, sizeof(syncbuffer), &teamsync, sizeof(Teamsync));
+							int se = send(client->sock, syncbuffer, sizeof(Teamsync), 0);
 
-								std::cout << "チーム情報";
-								for (int i = 0; i < team[client->player->teamGrantID].clients.size(); ++i)
-								{
-									std::cout << team[client->player->teamGrantID].clients.at(i)->player->id<<",";
-								}
-								std::cout << std::endl;
-							//チームにいる人に加入者の情報を送る
-						//		int s = send(team[i].sock[j], buffer, sizeof(buffer), 0);
-						//		std::cout << "ID " << team[i].ID[j] << " : にID　" << client->player->id << "の加入情報を送信" << std::endl;
+							std::cout << "チーム情報";
+							//for (int i = 0; i < client->team->clients.size(); ++i)
+							//{
+							//	std::cout << client->team->clients.at(i)->player->id << ",";
+							//}
+							std::cout << std::endl;
 						}
-
-						//チームに入れるタイミングかどうか？
-						//if(team[i].isJoin)
-						////何番目に入るか確認
-						//{
-						//	for (int j = 0; j < TeamJoinMax; ++j)
-						//	{
-						//		//同期用にチームのIDをいれる
-						//		teamsync.id[j] = team[i].ID[j];
-						//
-						//		//チームに空きがあるか
-						//		if (team[i].ID[j] == 0)
-						//		{
-						//			//入れたら
-						//			join = true;
-						//			team[i].sock[j] = client->sock;
-						//			team[i].ID[j] = client->player->id;
-						//			++team[i].logincount;
-						//			team[i].uAddr[j] = client->uAddr;
-						//
-						//			client->player->teamnumber = team[i].TeamNumber;
-						//
-						//			client->player->teamGrantID = i;
-						//			//入れたら送る
-						//			int s = send(client->sock, buffer, sizeof(Teamjoin), 0);
-						//			std::cout << client->player->id << "がチームID : " << teamjoin.number << " に加入" << std::endl;
-						//
-						//			std::cout << "チーム情報"<< team[i].ID[0]<<" " << team[i].ID[1] << " " << team[i].ID[2] << " " << team[i].ID[3] << " " << std::endl;
-						//			//チームに入ろうとした人は誰がチームにいるかわからんから
-						//			teamsync.cmd = TcpTag::Teamsync;
-						//			teamsync.id[j] = teamjoin.id;
-						//			//ここでsendする
-						//			memcpy_s(&syncbuffer, sizeof(syncbuffer), &teamsync, sizeof(Teamsync));
-						//			int se = send(client->sock, syncbuffer, sizeof(Teamsync), 0);
-						//			break;
-						//		}
-						//
-						//		//チームにいる人に加入者の情報を送る
-						//		int s = send(team[i].sock[j], buffer, sizeof(buffer), 0);
-						//		std::cout << "ID " << team[i].ID[j] << " : にID　" << client->player->id << "の加入情報を送信" << std::endl;
-						//	}
-						//	break;
-						//
-						//}
 					}
+
+					//for (int i = 0; i < TeamMax - 1; ++i)
+					//{
+					//	//チーム加入番号と一致しなければ
+					//	if (team[i].TeamNumber != teamjoin.number)continue;
+					//	//チームの全員埋まっていたら
+					//	if (team[i].clients.size() >= 4)continue;
+					//	//チームに入れるタイミングかどうか？
+					//	if (team[i].isJoin)
+					//	{
+					//		//入れたら
+					//			join = true;
+					//			client->player->teamnumber = team[i].TeamNumber;
+					//			client->player->teamGrantID = i;
+					//			
+					//			team[i].clients.emplace_back(client);
+					//			//入れたら送る
+					//			int s = send(client->sock, buffer, sizeof(Teamjoin), 0);
+					//			std::cout << client->player->id << "がチームID : " << teamjoin.number << " に加入" << std::endl;
+					//
+					//			
+					//			//チームに入ろうとした人は誰がチームにいるかわからんから
+					//			teamsync.cmd = TcpTag::Teamsync;
+					//
+					//			for (int j = 0; j < team[i].clients.size(); ++j)
+					//			{
+					//				teamsync.id[j] = team[i].clients.at(j)->player->id;
+					//				//本人に以外に送るため
+					//				if (teamjoin.id!= teamsync.id[j])
+					//				{
+					//					//チームにいる人に加入者の情報を送る
+					//					int s = send(team[i].clients.at(j)->sock, buffer, sizeof(buffer), 0);
+					//					std::cout << "ID " << team[i].clients.at(j)->player->id << " : にID　" << client->player->id << "の加入情報を送信" << std::endl;
+					//				}
+					//			}
+					//			//参加者本人にすでにいる人の情報を取得送る
+					//			memcpy_s(&syncbuffer, sizeof(syncbuffer), &teamsync, sizeof(Teamsync));
+					//			int se = send(client->sock, syncbuffer, sizeof(Teamsync), 0);
+					//
+					//			std::cout << "チーム情報";
+					//			for (int i = 0; i < team[client->player->teamGrantID].clients.size(); ++i)
+					//			{
+					//				std::cout << team[client->player->teamGrantID].clients.at(i)->player->id<<",";
+					//			}
+					//			std::cout << std::endl;
+					//		//チームにいる人に加入者の情報を送る
+					//	//		int s = send(team[i].sock[j], buffer, sizeof(buffer), 0);
+					//	//		std::cout << "ID " << team[i].ID[j] << " : にID　" << client->player->id << "の加入情報を送信" << std::endl;
+					//	}
+					//}
+					// 
 					//チームに加入出来なかったら
 					if (!join)
 					{
@@ -484,45 +499,44 @@ void Server::Recieve(Client* client)
 					if (teamLeave.isHost)
 					{
 						//チームに入れなくする
-						team[teamGrantID].isJoin = false;
-						std::cout <<"ID " << teamLeave.id << "のホストがチームを解散したチーム番号" << team[teamGrantID].TeamNumber <<std::endl;
+						//team[teamGrantID].isJoin = false;
+						client->team->isJoin = false;
+						//std::cout <<"ID " << teamLeave.id << "のホストがチームを解散したチーム番号" << team[teamGrantID].TeamNumber <<std::endl;
+						std::cout <<"ID " << teamLeave.id << "のホストがチームを解散したチーム番号" << client->team->TeamNumber <<std::endl;
 					}
 					else
 					{
-						std::cout << "ID" << teamLeave.id  << "　がチームから抜けたチーム番号 " << team[teamGrantID].TeamNumber << std::endl;
+						//std::cout << "ID" << teamLeave.id  << "　がチームから抜けたチーム番号 " << team[teamGrantID].TeamNumber << std::endl;
+						std::cout << "ID" << teamLeave.id  << "　がチームから抜けたチーム番号 " << client->team->TeamNumber << std::endl;
 					}
 
 					//チームメンバーに送信
-					for (int i = 0; i < team[teamGrantID].clients.size(); ++i)
+					//for (int i = 0; i < team[teamGrantID].clients.size(); ++i)
+					for (int i = 0; i < client->team->clients.size(); ++i)
 					{
 						//if (team[teamGrantID].ID[i] <= 0)continue;
 
-						std::cout << "送信先id " << team[teamGrantID].clients.at(i)->player->id << std::endl;
-						int s = send(team[teamGrantID].clients.at(i)->sock, buffer, sizeof(buffer), 0);
+						//std::cout << "送信先id " << team[teamGrantID].clients.at(i)->player->id << std::endl;
+						std::cout << "送信先id " << client->team->clients.at(i)->player->id << std::endl;
+						//int s = send(team[teamGrantID].clients.at(i)->sock, buffer, sizeof(buffer), 0);
+						int s = send(client->team->clients.at(i).get()->sock, buffer, sizeof(buffer), 0);
 
 						std::cout <<"ID " << teamLeave.id << "はチームから抜けた " << std::endl;
-						////抜けた場所を初期化
-						//if (team[teamGrantID].ID[i] == teamLeave.id)
-						//{
-						//	team[teamGrantID].sock[i] = 0;
-						//	team[teamGrantID].ID[i] = 0;
-						//	team[teamGrantID].logincount -= 1;
-						//	team[teamGrantID].check[i] = false;
-						//}
+						
 					}
 					
-					// teamGrantIDを基に、削除する処理
-					auto& Clients = team[teamGrantID].clients; // 省略用の参照
-					auto it = std::find(Clients.begin(), Clients.end(), client); // client を検索
-
-					if (it != Clients.end()) {
-						// 見つかった場合は削除
-						Clients.erase(it);
-					}
-					else {
-						// 見つからなかった場合の処理（必要に応じて追加）
-						std::cout << "Client not found in team[teamGrantID].clients " << client->player->id << std::endl;
-					}
+					//// teamGrantIDを基に、削除する処理
+					//auto& Clients = team[teamGrantID].clients; // 省略用の参照
+					//auto it = std::find(Clients.begin(), Clients.end(), client); // client を検索
+					//
+					//if (it != Clients.end()) {
+					//	// 見つかった場合は削除
+					//	Clients.erase(it);
+					//}
+					//else {
+					//	// 見つからなかった場合の処理（必要に応じて追加）
+					//	std::cout << "Client not found in team[teamGrantID].clients " << client->player->id << std::endl;
+					//}
 
 				}
 				break;
@@ -535,19 +549,23 @@ void Server::Recieve(Client* client)
 						for (int i = 0; i < TeamJoinMax; ++i)
 						{
 							//チームの本人が見つかったら
-							if (team[teamGrantID].clients.at(i)->sock == client->sock)
+							//if (team[teamGrantID].clients.at(i)->sock == client->sock)
+							if (client->team->clients.at(i)->sock == client->sock)
 							{
-								team[teamGrantID].clients.at(i)->startCheck = startcheck.check;
+								//team[teamGrantID].clients.at(i)->startCheck = startcheck.check;
+								client->team->clients.at(i)->startCheck = startcheck.check;
 
 								int s = send(client->sock, buffer, sizeof(StartCheck), 0);
 
 								if (startcheck.check)
 								{
-									std::cout << team[i].TeamNumber << "のID　:　" << client->player->id << "準備OK" << std::endl;
+									//std::cout << team[i].TeamNumber << "のID　:　" << client->player->id << "準備OK" << std::endl;
+									std::cout << client->team->TeamNumber << "のID　:　" << client->player->id << "準備OK" << std::endl;
 								}
 								else
 								{
-									std::cout << team[i].TeamNumber << "のID　:　" << client->player->id << "準備中" << std::endl;
+									//std::cout << team[i].TeamNumber << "のID　:　" << client->player->id << "準備中" << std::endl;
+									std::cout << client->team->TeamNumber << "のID　:　" << client->player->id << "準備中" << std::endl;
 								}
 
 								break;
@@ -574,19 +592,25 @@ void Server::Recieve(Client* client)
 
 						int teamGrantID = client->player->teamGrantID;
 						//ゲーム中はチームに参加できなくする
-						team[teamGrantID].isJoin = false;
+						//team[teamGrantID].isJoin = false;
+						client->team->isJoin = false;
+
 						std::cout << "チームでゲームスタートチーム " << std::endl;
-						std::cout << "チーム番号 " << team[teamGrantID].TeamNumber << " 加入不可" << std::endl;
+						//std::cout << "チーム番号 " << team[teamGrantID].TeamNumber << " 加入不可" << std::endl;
+						std::cout << "チーム番号 " << client->team->TeamNumber << " 加入不可" << std::endl;
 						//ホストからかどうか
-						if (team[teamGrantID].clients.at(0)->player->id != gamestart.id)continue;
+						//if (team[teamGrantID].clients.at(0)->player->id != gamestart.id)continue;
+						//if (team[teamGrantID].clients.at(0)->player->id != gamestart.id)continue;
 
 						bool isStartCheck = true;
 						//同じチーム番号が見つかったて
 						//全員が準備できているか
-						for (int i = 1; i < team[teamGrantID].clients.size(); ++i)
+						//for (int i = 1; i < team[teamGrantID].clients.size(); ++i)
+						for (int i = 1; i < client->team->clients.size(); ++i)
 						{
 							//チームメンバーに準備出来てない人がいたら
-							if (team[teamGrantID].clients.at(i)->startCheck != true)
+							//if (team[teamGrantID].clients.at(i)->startCheck != true)
+							if (client->team->clients.at(i)->startCheck != true)
 							{
 								isStartCheck = false;
 								break;
@@ -596,14 +620,20 @@ void Server::Recieve(Client* client)
 						//全員の準備ができていたら
 						if (isStartCheck)
 						{
-							for (int i = 0; i<team[teamGrantID].clients.size(); ++i)
+							//for (int i = 0; i<team[teamGrantID].clients.size(); ++i)
+							for (int i = 0; i< client->team->clients.size(); ++i)
 							{
-								int s = send(team[teamGrantID].clients.at(i)->sock, buffer, sizeof(buffer), 0);
-								std::cout << "ゲームスタート送信 "<< team[teamGrantID].clients.at(i)->player->id<< std::endl;
-								std::cout<<"ID : " << team[teamGrantID].clients.at(i)->player->id << "uaddr "<< team[teamGrantID].clients.at(i)->uAddr.sin_addr.S_un.S_addr <<
-								"uport"<< team[teamGrantID].clients.at(i)->uAddr.sin_port << std::endl;
+								//int s = send(team[teamGrantID].clients.at(i)->sock, buffer, sizeof(buffer), 0);
+								int s = send(client->team->clients.at(i)->sock, buffer, sizeof(buffer), 0);
+								//std::cout << "ゲームスタート送信 "<< team[teamGrantID].clients.at(i)->player->id<< std::endl;
+								std::cout << "ゲームスタート送信 "<< client->team->clients.at(i)->player->id<< std::endl;
+								//std::cout << "ID : " << team[teamGrantID].clients.at(i)->player->id << "uaddr " << team[teamGrantID].clients.at(i)->uAddr.sin_addr.S_un.S_addr <<
+								//"uport" << team[teamGrantID].clients.at(i)->uAddr.sin_port << std::endl;
+								std::cout<<"ID : " << client->team->clients.at(i)->player->id << "uaddr "<< client->team->clients.at(i)->uAddr.sin_addr.S_un.S_addr <<
+								"uport"<< client->team->clients.at(i)->uAddr.sin_port << std::endl;
 
-								std::cout <<"teamGrantID : " << team[teamGrantID].clients.at(i)->player->teamGrantID << std::endl;
+								//std::cout <<"teamGrantID : " << team[teamGrantID].clients.at(i)->player->teamGrantID << std::endl;
+								std::cout <<"TeamNUmber : " << client->team->TeamNumber << std::endl;
 							}
 						}
 
@@ -618,17 +648,22 @@ void Server::Recieve(Client* client)
 
 					int teamGrantID = client->player->teamGrantID;
 					//ホストからかどうか
-					if (team[teamGrantID].clients.at(0)->sock == client->sock)
+					//if (team[teamGrantID].clients.at(0)->sock == client->sock)
+					if (client->team->clients.at(0)->sock == client->sock)
 					{
-						for(int i=0;i< team[teamGrantID].clients.size();++i)
+						//for(int i=0;i< team[teamGrantID].clients.size();++i)
+						for(int i=0;i< client->team->clients.size();++i)
 						{ 
 							//チーム全員の準備チェックを外す
-							team[teamGrantID].clients.at(i)->startCheck = false;
+							//team[teamGrantID].clients.at(i)->startCheck = false;
+							client->team->clients.at(i)->startCheck = false;
 						}
 					}
 					//チームにはいれるようにする
-					team[teamGrantID].isJoin = true;
-					std::cout	<<"チーム番号 " << team[teamGrantID].TeamNumber << " 加入可能" << std::endl;
+					//team[teamGrantID].isJoin = true;
+					client->team->isJoin = true;
+					//std::cout	<<"チーム番号 " << team[teamGrantID].TeamNumber << " 加入可能" << std::endl;
+					std::cout	<<"チーム番号 " << client->team->TeamNumber << " 加入可能" << std::endl;
 
 				}
 				break;
@@ -646,7 +681,8 @@ void Server::Recieve(Client* client)
 				{
 					int teamGrantID = client->player->teamGrantID;
 					//チームのホストに敵のダメージ判定を送る
-					int s = send(team[teamGrantID].clients.at(0)->sock, buffer, sizeof(buffer), 0);
+					//int s = send(team[teamGrantID].clients.at(0)->sock, buffer, sizeof(buffer), 0);
+					int s = send(client->team->clients.at(0)->sock, buffer, sizeof(buffer), 0);
 
 				}
 				break;
@@ -696,9 +732,9 @@ void Server::Login(SOCKET clientsock, short ID)
 
 }
 
-bool Server::HasSameData(const std::vector<Client*>& vec, const sockaddr_in& target)
+bool Server::HasSameData(const std::vector<std::shared_ptr<Client>>& vec, const sockaddr_in& target)
 {
-	for (const Client* client : vec)
+	for (const auto& client : vec)
 	{
 		if (client->uAddr.sin_addr.S_un.S_addr == target.sin_addr.S_un.S_addr &&
 			client->uAddr.sin_port == target.sin_port)

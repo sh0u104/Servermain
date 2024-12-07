@@ -11,7 +11,8 @@
 class Server
 {
 public:
-
+	// 前方宣言
+	struct Team;
 	void UDPExecute();
 
 	// クライアント情報
@@ -19,10 +20,18 @@ public:
 		struct sockaddr_in addr {};
 		struct sockaddr_in uAddr {};
 		SOCKET sock = INVALID_SOCKET;
-		Player* player = nullptr;
+		//Player* player = nullptr;
+		std::shared_ptr<Player> player;
 		bool Geustflag = false;
 		bool isRecvUdpAddr = false;
 		bool startCheck = false;
+		Team* team = nullptr; // 所属するチームを示すポインタ
+	};
+	struct Team
+	{
+		std::vector<std::shared_ptr<Client>> clients;
+		int TeamNumber = 0;
+		bool isJoin = false;
 	};
 	enum class TcpTag : unsigned short
 	{
@@ -53,14 +62,7 @@ public:
 	};
 
 
-	struct Team
-	{
-
-		std::vector<Client*> clients;
-		
-		int TeamNumber = 0;
-		bool isJoin = false;
-	};
+	
 
 	struct SenderData
 	{
@@ -88,10 +90,10 @@ public:
 	};
 	//std::vector<SignData>signData;
 
-#define TeamJoinMax 3
+#define TeamJoinMax 4
 #define TeamMax 10
-	Team team[TeamMax];
-
+	//Team team[TeamMax];
+	std::vector<std::shared_ptr<Team>> teams;
 
 
 	struct Message
@@ -240,19 +242,21 @@ public:
 
 	void Execute();
 	void Exit();
-	void Recieve(Client* client);
+	void Recieve(std::shared_ptr<Client> client);
 	void EraseClient(Client* client);
 
 	void Login(SOCKET clientsock, short ID);
 
 	// 登録済のクライアントか判断を行う
-	bool HasSameData(const std::vector<Client*>& vec, const sockaddr_in& target);
 	
+	bool HasSameData(const std::vector<std::shared_ptr<Client>>& vec, const sockaddr_in& target);
 private:
 	int id = 0;
 	SOCKET sock = INVALID_SOCKET;
-	std::vector<Client*> clients;
-	std::vector<std::thread*> recvThreads;
+	//std::vector<Client*> clients;
+	//std::vector<std::thread*> recvThreads;
+	std::vector<std::shared_ptr<std::thread>> recvThreads;
+	std::vector<std::shared_ptr<Client>> clients;
 	bool loop = true;
 
 	int teamnumbergrant = 1000;

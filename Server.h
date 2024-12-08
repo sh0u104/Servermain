@@ -243,13 +243,15 @@ public:
 	void Execute();
 	void Exit();
 	void Recieve(std::shared_ptr<Client> client);
-	void EraseClient(Client* client);
-
+	//void EraseClient(Client* client);
+	void EraseClient(std::shared_ptr<Client> client);
 	void Login(SOCKET clientsock, short ID);
 
 	// “o˜^Ï‚ÌƒNƒ‰ƒCƒAƒ“ƒg‚©”»’f‚ğs‚¤
-	
 	bool HasSameData(const std::vector<std::shared_ptr<Client>>& vec, const sockaddr_in& target);
+	//teams‚©‚çclient‚Ìteam‚ğÁ‹
+	void RemoveClientFromTeam(std::shared_ptr<Client> client, std::vector<std::shared_ptr<Team>>& teams);
+
 private:
 	int id = 0;
 	SOCKET sock = INVALID_SOCKET;

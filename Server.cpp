@@ -341,12 +341,13 @@ void Server::Recieve(std::shared_ptr<Client> client)
 
 					auto team = std::make_shared<Team>();
 					++teamnumbergrant;
-					
+
+					client->player->id = teamcreate.id;
+					client->player->teamnumber = teamnumbergrant;
+					client->team = team.get();
 					team->isJoin = true;
 					team->TeamNumber = teamnumbergrant;
-					client->player->teamnumber = teamnumbergrant;
 					team->clients.emplace_back(client);
-					client->team = team.get();
 					teams.emplace_back(team);
 
 					std::cout << "ID : " << client->player->id << "がチーム作成 ID : " << team->TeamNumber << std::endl;
@@ -368,7 +369,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					bool join = false;
 					memcpy_s(&teamjoin, sizeof(teamjoin), buffer, sizeof(Teamjoin));
 
-					//ゲストじゃない時の為に
+					//ゲストログインじゃない時の為に
 					client->player->id = teamjoin.id;
 
 					for (int i = 0; i < teams.size(); ++i)
@@ -573,25 +574,22 @@ void Server::Recieve(std::shared_ptr<Client> client)
 
 				}
 				break;
-				//case TcpTag::Message:
-				//{
-				//	Message massage;
-				//	std::cout << "Message " << std::endl;
-				//	memcpy(&massage, buffer, sizeof(Message));
-				//	std::cout << massage.text << std::endl;
-				//	for (int i = 0; i < TeamMax - 1; ++i)
-				//	{
-				//		if (client->player->teamnumber != team[i].TeamNumber)continue;
-				//		for (int j = 0; j < 3; ++j)
-				//		{
-				//			if (team[i].sock[j] <= 0)continue;
-				//			//std::cout << "送信元id " << client->player->id << std::endl;
-				//			//std::cout << "送信先id " << Client->player->id << std::endl;
-				//			int s = send(team[i].sock[j], buffer, sizeof(buffer), 0);
-				//		}
-				//	}
-				//}
-				//break;
+				case TcpTag::Message:
+				{
+					Message massage;
+					memcpy(&massage, buffer, sizeof(Message));
+					std::cout << "チーム番号" << client->team->TeamNumber<<"のID :"<<client->player->id << "のMessageを取得 "<< massage.text << std::endl;
+
+					for (int i = 0; i < client->team->clients.size(); ++i)
+					{
+						if (client->team->clients.at(i)->player->id != client->player->id)
+							std::cout <<"チーム番号" << client->team->TeamNumber << "の" << client->player->id << "に送信 " << std::endl;
+							//continue;
+						int s = send(client->team->clients.at(i)->sock, buffer, sizeof(buffer), 0);
+
+					}
+				}
+				break;
 				}
 			}
 

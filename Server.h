@@ -51,6 +51,7 @@ public:
 		Login,
 		UdpAddr,          //サーバーでUDPのアドレス保存用
 		EnemyDamage,    //敵がダメージを受けたら
+		Message,
 	};
 	enum class UdpTag : unsigned short
 	{

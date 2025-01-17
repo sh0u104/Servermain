@@ -60,6 +60,7 @@ public:
 		EnemyMove,       //敵の移動
 		Attack,			// 攻撃
 		UdpAddr,          //サーバーでUDPのアドレス保存用
+		Ping,
 	};
 
 

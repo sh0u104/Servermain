@@ -177,7 +177,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 		//UDP
 		{
 			char Buffer[256]{};
-			int addrSize = sizeof(sockaddr);
+			int addrSize = sizeof(sockaddr_in);
 			sockaddr_in temp;
 			int size = recvfrom(uSock, Buffer, sizeof(Buffer), 0, reinterpret_cast<sockaddr*>(&temp), &addrSize);
 			
@@ -220,33 +220,40 @@ void Server::Recieve(std::shared_ptr<Client> client)
 			    //clientsに登録されてるかどうか
 				if (HasSameData(clients, temp))
 				{
+					//本人に返す
+					if (static_cast<UdpTag>(type) == UdpTag::Ping && client->uAddr.sin_port == temp.sin_port)
+					{	
+						sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+					}
 					//チームに誰かいるか
 					if (client->team)
-					//if (client->team->clients.size() > 0 && client->player->id != 0)
-					//チームのclientsかどうか
-					if (HasSameData(client->team->clients, temp))
 					{
-						switch (static_cast<UdpTag>(type))
+						//if (client->team->clients.size() > 0 && client->player->id != 0)
+						//チームのclientsかどうか
+						if (HasSameData(client->team->clients, temp))
 						{
-						case UdpTag::Move:
-						{
-							//自分なら飛ばす
-							if (temp.sin_port == client->uAddr.sin_port)
-								break;
-							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
-							
-						}
-						break;
-						//ホストのエネミー情報をチームメンバーに送る用
-						case UdpTag::EnemyMove:
-						{
-							//自分なら飛ばす
-							if (temp.sin_port == client->uAddr.sin_port)
-								break;
-							size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
-							
-						}
-						break;
+							switch (static_cast<UdpTag>(type))
+							{
+							case UdpTag::Move:
+							{
+								//自分なら飛ばす
+								if (temp.sin_port == client->uAddr.sin_port)
+									break;
+								size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+
+							}
+							break;
+							//ホストのエネミー情報をチームメンバーに送る用
+							case UdpTag::EnemyMove:
+							{
+								//自分なら飛ばす
+								if (temp.sin_port == client->uAddr.sin_port)
+									break;
+								size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+
+							}
+							break;
+							}
 						}
 					}
 				}
@@ -541,19 +548,22 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					memcpy_s(&gameend, sizeof(GameEnd), buffer, sizeof(GameEnd));
 
 					int teamGrantID = client->player->teamGrantID;
-					//ホストからかどうか
-					if (client->team->clients.at(0)->sock == client->sock)
+					
+					//チームを組んでるかどうか
+					if (client->team)
 					{
-						
+
 						for (int i = 0; i < client->team->clients.size(); ++i)
-						{ 
+						{
 							//チーム全員の準備チェックを外す
 							client->team->clients.at(i)->startCheck = false;
 						}
+						//チームにはいれるようにする
+						client->team->isJoin = true;
+						std::cout << "チーム番号 " << client->team->TeamNumber << " 加入可能" << std::endl;
 					}
-					//チームにはいれるようにする
-					client->team->isJoin = true;
-					std::cout	<<"チーム番号 " << client->team->TeamNumber << " 加入可能" << std::endl;
+	
+					
 
 				}
 				break;

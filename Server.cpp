@@ -220,7 +220,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 			    //clientsに登録されてるかどうか
 				if (HasSameData(clients, temp))
 				{
-					//本人に返す
+					//本人に返すping測定用
 					if (static_cast<UdpTag>(type) == UdpTag::Ping && client->uAddr.sin_port == temp.sin_port)
 					{	
 						sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
@@ -239,7 +239,15 @@ void Server::Recieve(std::shared_ptr<Client> client)
 								//自分なら飛ばす
 								if (temp.sin_port == client->uAddr.sin_port)
 									break;
-								size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+
+								PlayerData playerData;
+								memcpy_s(&playerData, sizeof(playerData), Buffer, sizeof(PlayerData));
+
+								if (client->sendCount < playerData.sendCount)
+								{
+									client->sendCount = playerData.sendCount;
+									size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+								}
 
 							}
 							break;
@@ -249,6 +257,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 								//自分なら飛ばす
 								if (temp.sin_port == client->uAddr.sin_port)
 									break;
+
 								size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
 
 							}
@@ -477,7 +486,12 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					memcpy_s(&startcheck, sizeof(startcheck), buffer, sizeof(StartCheck));
 
 					client->startCheck= startcheck.check;
-					int s = send(client->sock, buffer, sizeof(StartCheck), 0);
+					//int s = send(client->sock, buffer, sizeof(StartCheck), 0);
+					//チームに各々の準備チェックを送る
+					for (int i = 0; i < client->team->clients.size(); ++i)
+					{
+						int s = send(client->team->clients.at(i)->sock, buffer, sizeof(buffer), 0);
+					}
 
 					if (startcheck.check)
 					{
@@ -487,6 +501,9 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					{
 						std::cout << client->team->TeamNumber << "のID　:　" << client->player->id << "準備中" << std::endl;
 					}
+					
+					
+
 				}
 				break;
 				case TcpTag::Gamestart:
@@ -562,9 +579,6 @@ void Server::Recieve(std::shared_ptr<Client> client)
 						client->team->isJoin = true;
 						std::cout << "チーム番号 " << client->team->TeamNumber << " 加入可能" << std::endl;
 					}
-	
-					
-
 				}
 				break;
 				case TcpTag::GeustLogin:
@@ -572,7 +586,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					++this->id;
 					client->player->id = this->id;
 					std::cout << "send login : " << this->id << "->" << client->player->id << std::endl;
-					client->Geustflag = true;
+					client->geustFlag = true;
 
 					Login(client->sock, this->id);
 				}

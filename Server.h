@@ -22,10 +22,11 @@ public:
 		SOCKET sock = INVALID_SOCKET;
 		//Player* player = nullptr;
 		std::shared_ptr<Player> player;
-		bool Geustflag = false;
+		bool geustFlag = false;
 		bool isRecvUdpAddr = false;
 		bool startCheck = false;
 		Team* team = nullptr; // 所属するチームを示すポインタ
+		short sendCount = 0;
 	};
 	struct Team
 	{
@@ -103,7 +104,8 @@ public:
 		UdpTag cmd;
 		char text[32];
 	};
-	struct PlayerInput
+
+	struct PlayerData
 	{
 		UdpTag cmd;
 		int id;
@@ -111,10 +113,8 @@ public:
 		DirectX::XMFLOAT3 position;
 		Player::State state;
 		DirectX::XMFLOAT3 angle;
+		short sendCount;
 	};
-	
-
-
 
 	struct PlayerLogin
 	{

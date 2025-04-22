@@ -4,6 +4,11 @@
 #include <WinSock2.h>
 #include <iostream>
 
+#include <fstream>
+#include <string>
+#include <ctime>
+#include <iomanip>
+
 #pragma comment(lib, "ws2_32.lib")
 // サーバ側コマンド入力スレッド
 void Server::Exit()
@@ -19,27 +24,6 @@ void Server::Exit()
 		}
 	}
 }
-// クライアント削除関数
-//void Server::EraseClient(Client* client)
-//{
-//	int i = 0;
-//	for (i = 0; i < clients.size(); ++i)
-//	{
-//		if (clients.at(i)->sock == client->sock)
-//		{
-//			int r = closesocket(client->sock);
-//			if (r != 0)
-//			{
-//				std::cout << "Close Socket Failed." << std::endl;
-//			}
-//			client->sock = INVALID_SOCKET;
-//			delete client->player;
-//			break;
-//		}
-//	}
-//	clients.erase(clients.begin() + i);
-//}
-
 
 void Server::UDPExecute()
 {
@@ -63,10 +47,15 @@ void Server::UDPExecute()
 }
 
 
+
 void Server::Execute()
 {
+	// サーバー起動時のログ
+	WriteLog(LogLevel::Info, "サーバーが起動しました");
 	std::cout << "Server起動" << std::endl;
 	std::cout << "接続だけならID 0" << std::endl;
+
+
 	// Server課題 サーバ情報設定
 	// WinsockAPIを初期化
 	WSADATA wsaData;
@@ -111,6 +100,8 @@ void Server::Execute()
 
 	UDPExecute();
 
+	//ログ
+	WriteLog(LogLevel::Info, "サーバーの初期化終了");
 
 	// サーバ側からコマンド入力で終了されるまでループする。
 	// キーボードでexitを入力するとループを抜けるための別スレッドを用意
@@ -121,11 +112,11 @@ void Server::Execute()
 	do {
 
 		std::shared_ptr<Client> newClient = std::make_shared<Client>();
-		//Client* newClient = new Client();
 		// 接続要求を処理する
 		newClient->sock = accept(sock, (struct sockaddr*)&newClient->addr, &size);
 		if (newClient->sock != INVALID_SOCKET)
 		{
+			WriteLog(LogLevel::Info, "新しいクライアントが接続しました (ソケット: " + std::to_string(newClient->sock) + ")");
 			//接続後処理
 			newClient->player = std::make_shared<Player>();
 			newClient->player->id = 0;
@@ -179,41 +170,46 @@ void Server::Recieve(std::shared_ptr<Client> client)
 			char Buffer[256]{};
 			int addrSize = sizeof(sockaddr_in);
 			sockaddr_in temp;
-			int size = recvfrom(uSock, Buffer, sizeof(Buffer), 0, reinterpret_cast<sockaddr*>(&temp), &addrSize);
+			int udpSize = recvfrom(uSock, Buffer, sizeof(Buffer), 0, reinterpret_cast<sockaddr*>(&temp), &addrSize);
 			
 
-			if (size == -1)
+			if (udpSize == -1)
 			{
 				memset(Buffer, 0, sizeof(Buffer));
 				int error = WSAGetLastError();
+				// エラーメッセージを作成
+				std::string errorMessage = "recvfrom error: " + std::to_string(error);
+
 				if (error == WSAEWOULDBLOCK) {
-					// データがまだ来ていない場合、処理をスキップして次のループへ
-					//if (client->uAddr.sin_port == temp.sin_port)
-					//continue;
+					// データがまだ来ていない場合、処理をスキップ
 				}
 				else {
 					// 他のエラーの場合、ループを終了
 					if (error == WSAECONNRESET&& client->uAddr.sin_port == temp.sin_port)
 					{
 						std::cout << client->player->id << "は接続が途切れた" << std::endl;
+						WriteLog(LogLevel::Error, "ID:" + std::to_string(client->player->id) + " は接続が途切れました (WSAECONNRESET)。");
 						Loop = false;
 					}
 					else
 					{
 						std::cout << client->player->id << " recv error" << error << std::endl;
+						std::string errorMessage = "recv エラー（UDP）: " + std::to_string(error);
+						WriteLog(LogLevel::Error, errorMessage);
 					}
 				}
 			}
-		    if (size == 0)
+		    if (udpSize == 0)
 			{
 				// クライアントが接続を閉じた場合の処理
 				std::cout << "接続を閉じた" << std::endl;
+				WriteLog(LogLevel::Info, "ID:" + std::to_string(client->player->id) + " が接続を閉じました。");
 				Loop = false;
 				break;
 			}
 			
 
-			if (size > 0)
+			if (udpSize > 0)
 			{
 				short type = 0;
 				memcpy_s(&type, sizeof(type), Buffer, sizeof(short));
@@ -246,7 +242,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 								if (client->sendCount < playerData.sendCount)
 								{
 									client->sendCount = playerData.sendCount;
-									size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+									udpSize = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
 								}
 
 							}
@@ -258,7 +254,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 								if (temp.sin_port == client->uAddr.sin_port)
 									break;
 
-								size = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
+								udpSize = sendto(uSock, Buffer, sizeof(Buffer), 0, (struct sockaddr*)(&client->uAddr), addrSize);
 
 							}
 							break;
@@ -300,9 +296,9 @@ void Server::Recieve(std::shared_ptr<Client> client)
 		//TCP
 		{
 			char buffer[2048];
-			int r = recv(client->sock, buffer, sizeof(buffer), 0);
+			int tcpSize = recv(client->sock, buffer, sizeof(buffer), 0);
 			
-			if (r == -1) {
+			if (tcpSize == -1) {
 				int error = WSAGetLastError();
 				if (error == WSAEWOULDBLOCK) {
 					// データがまだ来ていない場合、処理をスキップして次のループへ
@@ -312,25 +308,26 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					if (error == WSAECONNRESET)
 					{
 						std::cout << client->player->id << "は接続が途切れた" << std::endl;
+						WriteLog(LogLevel::Error,"ID:" + std::to_string(client->player->id) + " は接続が途切れました (WSAECONNRESET)。");
 						Loop = false;
 					}
 					else
 					{
 						std::cout << client->player->id << " recv error" << error << std::endl;
+						std::string errorMessage = "recv エラー（TCP）: " + std::to_string(error);
+						WriteLog(LogLevel::Error, errorMessage);
 					}
 					
 				}
 			}
-			if (r == 0)
+			if (tcpSize == 0)
 			{
 				Loop = false;
-				if (clients.size() <= 0)
-				{
-					std::cout << "サーバー閉じる" << std::endl;
-				}
+				std::cout << client->player->id << " が接続を閉じました" << std::endl;
+				WriteLog(LogLevel::Info,"ID:"+ std::to_string(client->player->id) + " が接続を閉じました。");
 			}
 
-			if (r > 0)
+			if (tcpSize > 0)
 			{
 				short type = 0;
 				memcpy_s(&type, sizeof(type), buffer, sizeof(short));
@@ -338,8 +335,11 @@ void Server::Recieve(std::shared_ptr<Client> client)
 				{
 				case TcpTag::Logout:
 				{
+
 					PlayerLogout logout;
 					memcpy_s(&logout, sizeof(logout), buffer, sizeof(PlayerLogout));
+
+					WriteLog(LogLevel::Info, "クライアント (ID:" + std::to_string(logout.id) + ") がログアウトしました");
 
 					std::cout << "ID " << logout.id << " 退出" << std::endl;
 					Loop = false;
@@ -372,6 +372,8 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					teamcreate.Permission = true;
 					memcpy_s(sendbuffer, sizeof(sendbuffer), &teamcreate, sizeof(TeamCreate));
 					int s = send(client->sock, sendbuffer, sizeof(TeamCreate), 0);
+
+					WriteLog(LogLevel::Info, "ID: " + std::to_string(client->player->id) + " がチームを作成しました" + std::to_string(team->TeamNumber));
 				}
 				break;
 				case TcpTag::Teamjoin:
@@ -394,6 +396,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 						if (teams.at(i)->TeamNumber != teamjoin.number)continue;
 						//チームの全員埋まっていたら
 						if (teams.at(i)->clients.size() >= 4)continue;
+
 						//チームに入れるタイミングかどうか？
 						if (teams.at(i)->isJoin)
 						{
@@ -420,6 +423,7 @@ void Server::Recieve(std::shared_ptr<Client> client)
 									std::cout << "ID " << teams.at(i)->clients.at(j)->player->id << " : にID　" << client->player->id << "の加入情報を送信" << std::endl;
 								}
 							}
+
 							//参加者本人にすでにいる人の情報を取得送る
 							memcpy_s(&syncbuffer, sizeof(syncbuffer), &teamsync, sizeof(Teamsync));
 							int se = send(client->sock, syncbuffer, sizeof(Teamsync), 0);
@@ -430,6 +434,8 @@ void Server::Recieve(std::shared_ptr<Client> client)
 								std::cout << client->team->clients.at(i)->player->id << ",";
 							}
 							std::cout << std::endl;
+							WriteLog(LogLevel::Info, "ID: " + std::to_string(client->player->id) +
+								" がチームID:"+ std::to_string(client->player->teamnumber) + "に加入しました");
 						}
 					}
 
@@ -440,6 +446,8 @@ void Server::Recieve(std::shared_ptr<Client> client)
 						memcpy_s(&failurebuffer, sizeof(failurebuffer), &teamjoin, sizeof(Teamjoin));
 						std::cout << "ID : " << teamjoin.id << "がチームに加入失敗 受信チーム番号" << teamjoin.number << std::endl;
 						int s = send(client->sock, failurebuffer, sizeof(failurebuffer), 0);
+						WriteLog(LogLevel::Info, "ID: " + std::to_string(client->player->id) +
+							" がチームID:" + std::to_string(client->player->teamnumber) + "に加入失敗");
 					}
 				}
 				break;
@@ -496,10 +504,12 @@ void Server::Recieve(std::shared_ptr<Client> client)
 					if (startcheck.check)
 					{
 						std::cout << client->team->TeamNumber << "のID　:　" << client->player->id << "準備OK" << std::endl;
+						WriteLog(LogLevel::Info, "チームID:" + std::to_string(client->team->TeamNumber) + "のID: " + std::to_string(client->player->id) + "準備OK");
 					}
 					else
 					{
 						std::cout << client->team->TeamNumber << "のID　:　" << client->player->id << "準備中" << std::endl;
+						WriteLog(LogLevel::Info, "チームID:" + std::to_string(client->team->TeamNumber) + "のID: " + std::to_string(client->player->id) + "準備中");
 					}
 					
 					
@@ -518,19 +528,18 @@ void Server::Recieve(std::shared_ptr<Client> client)
 						//組んでなかったそのまま返す
 						send(client->sock, buffer, sizeof(buffer), 0);
 						std::cout << "ソロでゲームスタートID "<< client->player->id <<  std::endl;
+						WriteLog(LogLevel::Info, "ソロでゲームが開始されました　ID ： "+ std::to_string(client->player->id));
 						break;
 					}
 					else
 					{
-						//ゲーム中はチームに参加できなくする
-						client->team->isJoin = false;
-
-						std::cout << "チームでゲームスタートチーム " << std::endl;
-						std::cout << "チーム番号 " << client->team->TeamNumber << " 加入不可" << std::endl;
+						
 						//ホストからかどうか
 						//if (team[teamGrantID].clients.at(0)->player->id != gamestart.id)continue;
 
 						bool isStartCheck = true;
+
+						
 						//チーム全員が準備できているか
 						for (int i = 1; i < client->team->clients.size(); ++i)
 						{
@@ -542,6 +551,16 @@ void Server::Recieve(std::shared_ptr<Client> client)
 							}
 						}
 
+						//ゲーム中はチームに参加できなくする
+						client->team->isJoin = false;
+
+						std::cout << "チームでゲームスタート" << std::endl;
+						std::cout << "チーム番号 " << client->team->TeamNumber << " 加入不可" << std::endl;
+						WriteLog(LogLevel::Info, "チームID:" + std::to_string(client->team->TeamNumber) + "ゲームスタート");
+						WriteLog(LogLevel::Info, "チームID:" + std::to_string(client->team->TeamNumber) + "への加入は不可となりました");
+						
+						
+						std::string teamLog = "チームID:" + std::to_string(client->team->TeamNumber) + "の構成: ";
 						//全員の準備ができていたら
 						if (isStartCheck)
 						{
@@ -550,10 +569,13 @@ void Server::Recieve(std::shared_ptr<Client> client)
 								int s = send(client->team->clients.at(i)->sock, buffer, sizeof(buffer), 0);
 
 								std::cout << "ゲームスタート送信 "<< client->team->clients.at(i)->player->id<< std::endl;
-								//std::cout<<"ID : " << client->team->clients.at(i)->player->id << "uaddr "<< client->team->clients.at(i)->uAddr.sin_addr.S_un.S_addr <<
-								//"uport"<< client->team->clients.at(i)->uAddr.sin_port << std::endl;
+								WriteLog(LogLevel::Info, "ゲームスタートをID:" + std::to_string(client->team->clients.at(i)->player->id) + "に送信しました");
+								//ログ用
+								int playerId = client->team->clients.at(i)->player->id;
+								teamLog += "ID:" + std::to_string(playerId);
+								teamLog += ", ";
 							}
-							std::cout << "TeamNUmber : " << client->team->TeamNumber << std::endl;
+							WriteLog(LogLevel::Info, teamLog);
 						}
 					}
 				}
@@ -578,15 +600,19 @@ void Server::Recieve(std::shared_ptr<Client> client)
 						//チームにはいれるようにする
 						client->team->isJoin = true;
 						std::cout << "チーム番号 " << client->team->TeamNumber << " 加入可能" << std::endl;
+						WriteLog(LogLevel::Info, "チームID: " + std::to_string(client->team->TeamNumber) + " はゲームクリア");
+						WriteLog(LogLevel::Info, "チームID: " + std::to_string(client->team->TeamNumber) + " は加入可能な状態です");
 					}
 				}
 				break;
 				case TcpTag::GeustLogin:
 				{
+
 					++this->id;
 					client->player->id = this->id;
 					std::cout << "send login : " << this->id << "->" << client->player->id << std::endl;
 					client->geustFlag = true;
+					WriteLog(LogLevel::Info, "クライアントがゲストログインしました（ID: " + std::to_string(client->player->id) + "）");
 
 					Login(client->sock, this->id);
 				}
@@ -701,3 +727,35 @@ void Server::RemoveClientFromTeam(std::shared_ptr<Client> client, std::vector<st
 	}
 }
 
+void Server::WriteLog(LogLevel level, const std::string& message)
+{
+	// ログファイルを追記モードで開く
+	std::ofstream logFile("server.log", std::ios::app);  // 追記モード
+	if (!logFile.is_open()) {
+		std::cout << "ログファイルのオープンに失敗しました。" << std::endl;
+		return;
+	}
+
+	// 現在の時刻を取得
+	time_t now = time(nullptr);
+	tm localTime;  // tm 構造体をスタックに定義
+	localtime_s(&localTime, &now);  // localtime_s は第二引数に tm のポインタを取る
+
+	// ログレベルを文字列に変換
+	std::string levelStr;
+	switch (level) {
+	case LogLevel::Info:  levelStr = "INFO"; break;
+	case LogLevel::Warn:  levelStr = "WARN"; break;
+	case LogLevel::Error: levelStr = "ERROR"; break;
+	case LogLevel::Debug: levelStr = "DEBUG"; break;
+	default: levelStr = "UNKNOWN"; break;
+	}
+
+	// ログの書き込み
+	logFile << "[" << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S")  // 時刻
+		<< "][" << levelStr << "] "  // ログレベル
+		<< message << "\n";  // メッセージ
+
+// ファイルを閉じる
+	logFile.close();
+}

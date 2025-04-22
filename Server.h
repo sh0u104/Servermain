@@ -15,6 +15,14 @@ public:
 	struct Team;
 	void UDPExecute();
 
+	//std::vector<SignData>signData;
+
+	
+
+#define TeamJoinMax 4
+#define TeamMax 10
+	std::vector<std::shared_ptr<Team>> teams;
+
 	// クライアント情報
 	struct Client {
 		struct sockaddr_in addr {};
@@ -64,9 +72,6 @@ public:
 		Ping,
 	};
 
-
-	
-
 	struct SenderData
 	{
 		char name[10];
@@ -91,14 +96,7 @@ public:
 		std::vector<User>friendList;
 
 	};
-	//std::vector<SignData>signData;
-
-#define TeamJoinMax 4
-#define TeamMax 10
-	//Team team[TeamMax];
-	std::vector<std::shared_ptr<Team>> teams;
-
-
+	
 	struct Message
 	{
 		UdpTag cmd;
@@ -254,6 +252,9 @@ public:
 	//teamsからclientのteamを消去
 	void RemoveClientFromTeam(std::shared_ptr<Client> client, std::vector<std::shared_ptr<Team>>& teams);
 
+	//ログ書きだし用
+	enum class LogLevel { Info, Warn, Error, Debug };
+	void WriteLog(LogLevel level, const std::string& message);
 private:
 	int id = 0;
 	SOCKET sock = INVALID_SOCKET;
